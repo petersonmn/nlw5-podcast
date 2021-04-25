@@ -1,35 +1,49 @@
-import { format, parseISO } from 'date-fns'
-import ptBR from 'date-fns/locale/pt-BR'
-import { GetStaticPaths, GetStaticProps } from 'next'
-import Image from 'next/image'
-import Link from 'next/link'
-import { api } from '../../services/api'
-import { convertDurationToTimeString } from '../../utils/convertDurationToTimeString'
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { GetStaticPaths, GetStaticProps } from "next"
+import Image from "next/image";
+import Link from "next/link";
+import { api } from "../../services/api"
+import { convertDurationToTimeString } from "../../utils/convertDurationToTimeString";
+import styles from './episode.module.scss'
 
-import styles from './episode.module.scss';
+import { useRouter } from 'next/router'
+import { usePlayer } from "../../contexts/PlayerContext";
+import Head from "next/head";
 
 type Episode = {
   id: string;
   title: string;
   thumbnail: string;
+  description: string;
   members: string;
   duration: number;
   durationAsString: string;
   url: string;
   publishedAt: string;
-  description: string;
 }
 
 type EpisodeProps = {
   episode: Episode;
 }
 
-export default function Episode({ episode }: EpisodeProps) {
+export default function Episode({ episode }: EpisodeProps ) {
+  const { play } = usePlayer()
+  const router = useRouter()
+
+  if (router.isFallback) {
+    return <p>Carregando...</p>
+  }
+
   return (
     <div className={styles.episode}>
+      <Head>
+        <title>{episode.title} | Podcastr</title>
+      </Head>
+
       <div className={styles.thumbnailContainer}>
         <Link href="/">
-          <button type="button">
+          <button>
             <img src="/arrow-left.svg" alt="Voltar"/>
           </button>
         </Link>
@@ -39,7 +53,7 @@ export default function Episode({ episode }: EpisodeProps) {
           src={episode.thumbnail}
           objectFit="cover"
         />
-        <button type="button">
+        <button onClick={() => play(episode)}>
           <img src="/play.svg" alt="Tocar episódio"/>
         </button>
       </div>
@@ -51,7 +65,13 @@ export default function Episode({ episode }: EpisodeProps) {
         <span>{episode.durationAsString}</span>
       </header>
 
-      <div className={styles.description} dangerouslySetInnerHTML={{ __html: episode.description }} />
+      <div
+        className={styles.description}
+        dangerouslySetInnerHTML={{
+          __html:
+          episode.description
+        }} 
+      />
     </div>
   )
 }
@@ -59,19 +79,17 @@ export default function Episode({ episode }: EpisodeProps) {
 export const getStaticPaths: GetStaticPaths = async () => {
   const { data } = await api.get('episodes', {
     params: {
-      _limit: 12,
-      _sort: 'publised_at',
-      _order: 'desc'
-    }
-  });
-
-  const paths = data.map(episode => {
-    return {
-      params: {
-        slug: episode.id
-      }
+      __limit: 2,
+      __sort: 'published_at',
+      __order: 'desc'
     }
   })
+
+  const paths = data.map(episode => ({
+    params: {
+      slug: episode.id
+    }
+  }))
 
   return {
     paths,
@@ -80,26 +98,28 @@ export const getStaticPaths: GetStaticPaths = async () => {
 }
 
 export const getStaticProps: GetStaticProps = async (ctx) => {
-  const { slug } = ctx.params
+  const { slug } = ctx.params;
 
-  const { data } = await api.get(`/episodes/${slug}`)
+  const { data } = await api.get(`/episodes/${slug}`);
 
   const episode = {
     id: data.id,
     title: data.title,
     thumbnail: data.thumbnail,
     members: data.members,
-    publishedAt: format(parseISO(data.published_at), 'd MMM yy', { locale: ptBR }),
+    publishedAt: format(parseISO(data.published_at), 'd MMM yy', { 
+      locale: ptBR
+    }),
     duration: Number(data.file.duration),
     durationAsString: convertDurationToTimeString(Number(data.file.duration)),
     description: data.description,
-    url: data.file.url
+    url: data.file.url,
   }
-  
+
   return {
     props: {
-      episode,
+      episode
     },
-    revalidate: 60 * 60 * 24, // 24 hours
+    revalidate: 60 * 60 * 24 //24 hours
   }
-} 
+}
